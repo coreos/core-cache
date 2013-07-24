@@ -1,0 +1,2 @@
+core-cache for memcached
+============
