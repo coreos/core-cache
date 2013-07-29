@@ -44,10 +44,6 @@ func (cp *connectionPool) getConn() (net.Conn, int) {
 	return cp.connects[i], i
 }
 
-func (cp *connectionPool) getConnNum() int {
-	return cp.currSize
-}
-
 func (cp *connectionPool) decrConnNum(n int) error {
 	cp.modifyLock.Lock()
 	defer cp.modifyLock.Unlock()
