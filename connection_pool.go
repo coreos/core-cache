@@ -80,6 +80,9 @@ func (cp *connectionPool) incrConnNum(n int) error {
 }
 
 func (cp *connectionPool) renewConn(i int) error {
+	cp.modifyLock.Lock()
+	defer cp.modifyLock.Unlock()
+
 	cp.connects[i].Close()
 	var err error
 	cp.connects[i], err = net.Dial("tcp", cp.serverName)
