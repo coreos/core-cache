@@ -44,22 +44,30 @@ func (cp *connectionPool) getConn() (net.Conn, int) {
 	return cp.connects[i], i
 }
 
-func (cp *connectionPool) decrConnNum(n int) error {
+func (cp *connectionPool) decrConnNum(n int) {
 	cp.modifyLock.Lock()
 	defer cp.modifyLock.Unlock()
+
+	if cp.currSize-n < MinSize {
+		panic("Out of bound")
+	}
+	cp.currSize -= n
 
 	for i := 0; i < n; i++ {
 		k := <-cp.available
 		cp.connects[k].Close()
 		cp.connects[k] = nil
-		cp.currSize--
 	}
-	return nil
 }
 
 func (cp *connectionPool) incrConnNum(n int) error {
 	cp.modifyLock.Lock()
 	defer cp.modifyLock.Unlock()
+
+	if cp.currSize+n > MaxSize {
+		panic("Out of bound")
+	}
+	cp.currSize += n
 
 	var err error
 	for i := 0; i < MaxSize; i++ {
@@ -69,7 +77,6 @@ func (cp *connectionPool) incrConnNum(n int) error {
 				return err
 			}
 			cp.available <- i
-			cp.currSize++
 			n--
 			if n == 0 {
 				return nil
@@ -97,12 +104,13 @@ func (cp *connectionPool) destory() {
 	cp.modifyLock.Lock()
 	defer cp.modifyLock.Unlock()
 
+	cp.currSize = 0
+
 	// close all the connections and set to nil
 	for i := 0; i < MaxSize; i++ {
 		if cp.connects[i] != nil {
 			cp.connects[i].Close()
 			cp.connects[i] = nil
-			cp.currSize--
 		}
 	}
 
