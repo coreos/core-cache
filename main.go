@@ -28,9 +28,11 @@ var c *consistent.Consistent
 var etcdClient *etcd.Client
 
 var port int
+var prefix string
 
 func init() {
 	flag.IntVar(&port, "p", 22122, "the port of the ds-memcached proxy")
+	flag.StringVar(&prefix, "prefix", "/service/memcached", "the etcd prefix")
 }
 
 func main() {
@@ -43,7 +45,7 @@ func main() {
 
 	etcdClient.SyncCluster()
 
-	presps, err := etcdClient.Get("/service/memcached")
+	presps, err := etcdClient.Get(prefix)
 
 	if err != nil {
 		fmt.Println("Add at least one memcached instance under path")
@@ -64,7 +66,7 @@ func watch() {
 	receiver := make(chan *store.Response, 10)
 	stop := make(chan bool, 1)
 	go update(receiver)
-	etcdClient.Watch("/service/memcached", 0, receiver, stop)
+	etcdClient.Watch(prefix, 0, receiver, stop)
 }
 
 func update(receiver chan *store.Response) {
