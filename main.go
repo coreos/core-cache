@@ -25,6 +25,7 @@ const (
 var rwLock sync.RWMutex
 
 var c *consistent.Consistent
+var etcdClient *etcd.Client
 
 var port int
 
@@ -38,16 +39,18 @@ func main() {
 
 	c = consistent.New()
 
-	etcd.SyncCluster()
+	etcdClient = etcd.NewClient()
 
-	presps, err := etcd.Get("/service/memcached")
+	etcdClient.SyncCluster()
+
+	presps, err := etcdClient.Get("/service/memcached")
 
 	if err != nil {
 		fmt.Println("Add at least one memcached instance under path")
 		os.Exit(1)
 	}
 
-	for _, resp := range *(presps) {
+	for _, resp := range presps {
 		debugln("Add server ", resp.Value)
 		c.Add(resp.Value)
 	}
@@ -61,7 +64,7 @@ func watch() {
 	receiver := make(chan *store.Response, 10)
 	stop := make(chan bool, 1)
 	go update(receiver)
-	etcd.Watch("/service/memcached", 0, receiver, &stop)
+	etcdClient.Watch("/service/memcached", 0, receiver, stop)
 }
 
 func update(receiver chan *store.Response) {
