@@ -70,8 +70,28 @@ func watch() {
 func update(receiver chan *store.Response) {
 	for {
 		resp := <-receiver
-		debugln("Add server ", resp.Value)
-		c.Add(resp.Value)
+		switch resp.Action {
+		case "SET":
+			// do nothing if the old server is the same as the new one
+			if resp.PrevValue == resp.Value {
+				debugln("Doing nothing; new server is the same as old one:", resp.Value)
+				continue
+			}
+			// check if we're adding a new server or updating an old one
+			if resp.PrevValue == "" {
+				debugln("Adding server:", resp.Value)
+				c.Add(resp.Value)
+			} else {
+				debugln("Replacing server:", resp.PrevValue, "with", resp.Value)
+				c.Remove(resp.PrevValue)
+				c.Add(resp.Value)
+			}
+		case "DELETE":
+			if resp.PrevValue != "" {
+				debugln("Removing server:", resp.PrevValue)
+				c.Remove(resp.PrevValue)
+			}
+		}
 	}
 }
 
