@@ -29,8 +29,10 @@ var etcdClient *etcd.Client
 
 var port int
 var prefix string
+var etcdClusterHost string
 
 func init() {
+	flag.StringVar(&etcdClusterHost, "C", "http://127.0.0.1:4001", "path to a known etcd cluster machine")
 	flag.IntVar(&port, "p", 22122, "the port of the ds-memcached proxy")
 	flag.StringVar(&prefix, "prefix", "/service/memcached", "the etcd prefix")
 }
@@ -41,9 +43,12 @@ func main() {
 
 	c = consistent.New()
 
-	etcdClient = etcd.NewClient()
+	etcdClient = etcd.NewClient([]string{etcdClusterHost})
 
-	etcdClient.SyncCluster()
+	if ok := etcdClient.SyncCluster(); !ok {
+		fmt.Println("Failed to sync with cluster. \nPlease make sure the cluster can be reached via the provided URL.")
+		os.Exit(1)
+	}
 
 	presps, err := etcdClient.Get(prefix)
 
