@@ -28,9 +28,13 @@ var c *consistent.Consistent
 var etcdClient *etcd.Client
 
 var port int
+var prefix string
+var etcdClusterHost string
 
 func init() {
+	flag.StringVar(&etcdClusterHost, "C", "http://127.0.0.1:4001", "path to a known etcd cluster machine")
 	flag.IntVar(&port, "p", 22122, "the port of the ds-memcached proxy")
+	flag.StringVar(&prefix, "prefix", "/service/memcached", "the etcd prefix")
 }
 
 func main() {
@@ -39,11 +43,14 @@ func main() {
 
 	c = consistent.New()
 
-	etcdClient = etcd.NewClient()
+	etcdClient = etcd.NewClient([]string{etcdClusterHost})
 
-	etcdClient.SyncCluster()
+	if ok := etcdClient.SyncCluster(); !ok {
+		fmt.Println("Failed to sync with cluster. \nPlease make sure the cluster can be reached via the provided URL.")
+		os.Exit(1)
+	}
 
-	presps, err := etcdClient.Get("/service/memcached")
+	presps, err := etcdClient.Get(prefix)
 
 	if err != nil {
 		fmt.Println("Add at least one memcached instance under path")
@@ -64,14 +71,34 @@ func watch() {
 	receiver := make(chan *store.Response, 10)
 	stop := make(chan bool, 1)
 	go update(receiver)
-	etcdClient.Watch("/service/memcached", 0, receiver, stop)
+	etcdClient.Watch(prefix, 0, receiver, stop)
 }
 
 func update(receiver chan *store.Response) {
 	for {
 		resp := <-receiver
-		debugln("Add server ", resp.Value)
-		c.Add(resp.Value)
+		switch resp.Action {
+		case "SET":
+			// do nothing if the old server is the same as the new one
+			if resp.PrevValue == resp.Value {
+				debugln("Doing nothing; new server is the same as old one:", resp.Value)
+				continue
+			}
+			// check if we're adding a new server or updating an old one
+			if resp.PrevValue == "" {
+				debugln("Adding server:", resp.Value)
+				c.Add(resp.Value)
+			} else {
+				debugln("Replacing server:", resp.PrevValue, "with", resp.Value)
+				c.Remove(resp.PrevValue)
+				c.Add(resp.Value)
+			}
+		case "DELETE":
+			if resp.PrevValue != "" {
+				debugln("Removing server:", resp.PrevValue)
+				c.Remove(resp.PrevValue)
+			}
+		}
 	}
 }
 
